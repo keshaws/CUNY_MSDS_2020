@@ -10,7 +10,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Data Analysis for mushroom dataset
+## Data Analysis for Thanksgiving Poll Data Set
 We are often tasked with taking data in one form and transforming it for easier downstream analysis. We will
 spend several weeks in this course on tidying and transformation operations. Some of this work could be done in
 SQL or R (or Python or…). Here, you are asked to use R—you may use any base functions or packages as you like.
