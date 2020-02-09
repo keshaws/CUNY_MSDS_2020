@@ -1,0 +1,159 @@
+---
+title: "DATA607 - Week 1 Assignment"
+author: "Keshaw Sahay"
+date: "Feb 06, 2020"
+Dataset: "Data Analysis for mushroom dataset"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data Analysis for mushroom dataset
+We are often tasked with taking data in one form and transforming it for easier downstream analysis. We will
+spend several weeks in this course on tidying and transformation operations. Some of this work could be done in
+SQL or R (or Python or…). Here, you are asked to use R—you may use any base functions or packages as you like.
+Your task is to first choose one of the provided datasets on fivethirtyeight.com that you find interesting:
+https://data.fivethirtyeight.com/
+You should first study the data and any other information on the GitHub site, and read the associated
+fivethirtyeight.com article.
+
+
+### Overview
+
+Using a SurveyMonkey poll, we asked 1,058 respondents on Nov. 17, 2015 the following questions about their Thanksgiving:
+
+Link for dataset: https://fivethirtyeight.com/features/heres-what-your-part-of-america-eats-on-thanksgiving/
+
+github : https://github.com/fivethirtyeight/data/blob/master/thanksgiving-2015/thanksgiving-2015-poll-data.csv
+
+
+
+###  _Environment set up_
+```{r}
+
+#loading required libraries
+library(tidyverse)
+
+library(curl)
+```
+### _Data Acquisition_
+
+2. Make sure that the original data file is accessible through your code—for example, stored in a GitHub repository or AWS S3 bucket and referenced in your code. If the code references data on your local machine, then your work is not reproducible!
+
+```{r}
+#data import from the source itself (uci.edu)
+
+poll_df <- read.csv('https://raw.githubusercontent.com/keshaws/CUNY_MSDS_2020/master/DATA607/Week1/data/thanksgiving-2015-poll-data.csv')
+
+dim(poll_df)
+
+```
+
+After ingesting the data and analyzing the dimension of it, I found there are 1058 data points/ observations and 65 variables/ features
+
+```{r}
+colnames(poll_df)
+```
+
+### _Subsetting dataset_
+
+Now selecting the below features for creating the subset of data from the main dataset
+
+```{r}
+poll_subset_df <- select(poll_df, 'RespondentID', 'Do.you.celebrate.Thanksgiving.', 'What.is.your.gender.', 'Age', 'How.would.you.describe.where.you.live.', 'US.Region')
+head(poll_subset_df,10)
+```
+
+Now, reanaming the columns of the subset
+
+```{r}
+poll_data_df <- rename(poll_subset_df,ID='RespondentID',celebrate='Do.you.celebrate.Thanksgiving.', gender = 'What.is.your.gender.', age_range='Age', living_region = 'How.would.you.describe.where.you.live.', us_region='US.Region')
+head(poll_data_df,5)
+```
+
+Finding the unique living region in the subset
+```{r}
+unique(poll_data_df$living_region)
+```
+
+### _Data Exploration_
+
+Now, using the group by and summarise function to get the count for each living region 
+```{r}
+poll_data_df %>%
+ group_by(living_region) %>%
+ summarize(count=n())
+```
+
+We can seee from above table that there are 110 data points for which there are no living region values
+
+
+Now, analyzing us region values, and it appears that there are 59 data points for which the values are missing
+```{r}
+poll_data_df %>%
+ group_by(us_region) %>%
+ summarize(count=n())
+```
+
+### _Data Cleansing_
+
+Now, cleansing the subset to get rid of missing us region data points.
+```{r}
+poll_data_clean <- poll_data_df %>%
+      filter((poll_data_df$us_region!=""))
+
+poll_data_clean %>%
+ group_by(us_region) %>%
+ summarize(count=n())
+ 
+```
+```{r}
+poll_data_clean <- poll_data_df %>%
+      filter((poll_data_df$us_region!=""))
+
+poll_data_clean %>%
+ group_by(celebrate) %>%
+ summarize(count=n())
+```
+
+
+
+```{r}
+poll_data_clean <- poll_data_df %>%
+      filter((poll_data_df$us_region!=""))
+
+poll_data_clean %>%
+ group_by(us_region, celebrate) %>%
+ summarize(count=n())
+ 
+```
+
+
+### _Data Visualization_
+Plotting the graph for living region with missing values 
+
+```{r}
+ggplot(poll_data_df, mapping = aes(poll_data_df$living_region))+
+    geom_bar(aes(fill=poll_data_df$age_range))+
+    xlab('Living Region')+labs(fill='gender')+geom_text(stat='count',aes(label = ..count..,y=..count..),vjust=-0.2)+
+    ggtitle('Poll data')
+```
+
+
+
+plotting the graph for us region with cleaned data points
+
+```{r}
+ggplot(poll_data_clean, mapping = aes(poll_data_clean$us_region))+
+    geom_bar(aes(fill=poll_data_clean$celebrate))+
+    xlab('US Region')+labs(fill='age_range')+geom_text(stat='count',aes(label = ..count..,y=..count..),vjust=-0.2)+
+    theme(axis.text.x = element_text(angle = 90))+
+    ggtitle('Poll data')
+```
+
+
+## Conclusion
+There are 1058 data points and 65 features present in the main dataset. After creating the subset and cleaning it for the "US Region" and completing the data visualization it appears that 68 said yes and 931 said no. Also, it appears from the plot that thanksgiving celebration is popular in suburban living region. Among the various US region, thanksgiving celebration is most popular in "south atlantic" region and least popular in "mountain" region. 
+
