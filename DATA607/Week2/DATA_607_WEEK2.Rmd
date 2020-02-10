@@ -1,0 +1,119 @@
+---
+title: "DATA_607_WEEK2"
+author: "Keshaw Sahay"
+date: "February 9, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Movie and Rating Data Analysis Using SQL and R
+
+Choose six recent popular movies. Ask at least five people that you know (friends, family, classmates, imaginary
+friends if necessary) to rate each of these movies that they have seen on a scale of 1 to 5. Take the results
+(observations) and store them in a SQL database of your choosing. Load the information from the SQL database
+into an R dataframe.
+
+###  _Environment set up_
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(RMySQL)
+```
+### _Database Interaction (RDMBS: MySQL)_
+
+<div id="info">
+Requirement: Created Database DATA607_MOVIEDB, user 'DATA607User' and 3 tables: Movie, Reviewer, Rating <br>
+_Note : SQL Scripts provided separately (github link)_ 
+</div>
+
+* Establish the MySQL database connection with MySQL Driver and proper connection string:
+    + user id
+    + password
+    + host
+    + database name
+
+Once the connection is established, view the tables. 
+
+```{r echo=FALSE}
+mypassword ='admin'
+```
+
+### _Database Connection_ 
+
+```{r}
+mydb =dbConnect(MySQL(),user='DATA607User',password=mypassword,dbname='DATA607_MOVIEDB',host='localhost')
+dbListTables(mydb)
+```
+
+Select the tables: movie, reviwer and ratings and fetch the resultset in their respective data frames
+
+### _Movie Data_
+
+```{r}
+movie_resultSet = dbSendQuery(mydb, 'select * from movie')
+movie_df <- fetch(movie_resultSet)
+movie_df
+```
+
+
+### _Reviewer Data_
+
+```{r}
+reviewer_resultSet = dbSendQuery(mydb, 'select * from reviewer')
+reviewer_df <- fetch(reviewer_resultSet)
+reviewer_df
+```
+
+### _Rating Data_
+
+```{r}
+rating_resultSet = dbSendQuery(mydb, 'select * from rating')
+rating_df <- fetch(rating_resultSet)
+head(rating_df,10)
+```
+
+### _Joining Movie Data and Rating Data_
+
+```{r}
+reviewer_movie_rating <- left_join(movie_df,rating_df,by.x ="movie_id",by.y = "movie_id")
+```
+
+Now, checking the combined dataframe of movie and rating data
+
+```{r}
+head(reviewer_movie_rating,30)
+```
+
+### _Hanling Missing Values_
+
+```{r}
+reviewer_movie_rating %>%
+  filter(is.na(rating))
+```
+
+Imputing the missing rating values with mean rating value
+
+```{r}
+reviewer_rating_cleaned_df <- reviewer_movie_rating %>%
+                            mutate(
+                              rating = chron::times(rating),
+                              rating = if_else(is.na(rating), mean(rating), rating)
+                              )
+reviewer_rating_cleaned_df
+```
+
+Now, checking for the reviewer rating after the data imputation. 
+
+```{r}
+movie_rating <- reviewer_rating_cleaned_df %>%
+    group_by(movie_name,movie_id) %>%
+    summarize(reviewer_rating =mean(rating)) %>%
+    arrange(desc(reviewer_rating))
+movie_rating
+```
+
+## Conclusion
+The three different datasets of movie, reiviewer and rating data fetched from SQL database "DATA607_MOVIEDB" and have been analyzed to find the final average score of each movie rating. After handling the missing values present in the reviewer dataset it's been found that "Frozen 2" topped the list and "Spies in Disguise"" finished last.
