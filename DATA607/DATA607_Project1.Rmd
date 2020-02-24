@@ -1,0 +1,172 @@
+---
+title: "DATA607_Project1"
+author: "Keshaw Sahay"
+date: "February 23, 2020"
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    number_section:  true
+    theme: cerulean
+    highlight:  tango
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Project 1
+In this project, you’re given a text file with chess tournament results where the information has some structure. Your job is to create an R Markdown file that generates a .CSV file (that could for example be imported into a SQL database) with the following information for all of the players:
+
+Player’s Name, Player’s State, Total Number of Points, Player’s Pre-Rating, and Average Pre Chess Rating of Opponents
+For the first player, the information would be:
+Gary Hua, ON, 6.0, 1794, 1605
+1605 was calculated by using the pre-tournament opponents’ ratings of 1436, 1563, 1600, 1610, 1649, 1663, 1716, and dividing by the total number of games played.
+
+If you have questions about the meaning of the data or the results, please post them on the discussion forum. Data science, like chess, is a game of back and forth…
+
+The chess rating system (invented by a Minnesota statistician named Arpad Elo) has been used in many other contexts, including assessing relative strength of employment candidates by human resource departments.
+
+You may substitute another text file (or set of text files, or data scraped from web pages) of similar or greater complexity, and create your own assignment and solution. You may work in a small team. All of your code should be in an R markdown file (and published to rpubs.com); with your data accessible for the person running the script.
+
+# Data Acquisition 
+
+```{r message=FALSE, warning=FALSE}
+library(stringr)
+library(tidyverse)
+library(ggplot2)
+```
+
+Importing tounrament project data
+
+```{r}
+#ingesting data from github repo
+tournament.data <- readLines('https://raw.githubusercontent.com/keshaws/CUNY_MSDS_2020/master/DATA607/tournamentinfo.txt')
+head(tournament.data,10)
+```
+
+
+```{r}
+#view data excluding first 4 lines
+tournament.data <- tournament.data[-c(0:4)]
+head(tournament.data)
+```
+
+# Data Wrangling
+
+## Torunament Data Cleaning 
+```{r}
+tournament.data <- tournament.data[sapply(tournament.data, nchar) > 0]
+head(tournament.data)
+```
+
+
+
+From dataset, it appears that each player data present in two consecutive rows. First row has player's information and match result. The second row has players state, USCF information.
+
+
+```{r}
+# extracting data of players match - Odd posistion starting from 1
+player.data <- c(seq(1, length(tournament.data), 3))
+player.info <- tournament.data[player.data]
+head(player.info)
+```
+
+```{r}
+# Extracting rating data - even position starting from 2
+player.rating.data <- c(seq(2, length(tournament.data), 3))
+player.rating.info <- tournament.data[player.rating.data]
+head(player.rating.info)
+```
+
+## Extract information of players using RegEx Tehniques
+
+
+Information on player name 
+```{r}
+player.name <- str_extract(player.info, "\\s+([[:alpha:]- ]+)\\b\\s*\\|")
+player.name <- gsub(player.name, pattern = "|", replacement = "", fixed = T)
+player.name <- trimws(player.name)
+head(player.name)
+```
+
+Infomration on player state
+
+```{r}
+player.state <- str_extract(player.rating.info, "[[:alpha:]]{2}")
+head(player.state)
+```
+
+Infomration on Player Pre rating score value
+```{r}
+player.prerating.score <- str_extract(player.rating.info, ".\\: \\s?[[:digit:]]{3,4}")
+player.prerating.score <- gsub(player.prerating.score, pattern = "R: ", replacement = "", fixed = T)
+player.prerating.score <- as.numeric(as.character(player.prerating.score))
+head(player.prerating.score)
+```
+
+Extract Players total points
+
+```{r}
+player.total.points <- str_extract(player.info, "[[:digit:]]+\\.[[:digit:]]")
+player.total.points <- as.numeric(as.character(player.total.points))
+head(player.total.points)
+```
+
+Infomration on players opponent info
+```{r}
+player.opponent.info <- str_extract_all(player.info, "[[:digit:]]{1,2}\\|")
+player.opponent.info <- str_extract_all(player.opponent.info, "[[:digit:]]{1,2}")
+player.opponent.info <- lapply(player.opponent.info, as.numeric)
+head(player.opponent.info)
+```
+
+Now calulating Player's opponent avg. rating
+
+```{r}
+opponent.avg.rating <- list()
+for (i in 1:length(player.opponent.info)){
+  opponent.avg.rating[i] <- round(mean(player.prerating.score[unlist(player.opponent.info[i])]),2)
+}
+opponent.avg.rating <- lapply(opponent.avg.rating, as.numeric)
+opponent.avg.rating <- data.frame(unlist(opponent.avg.rating))
+head(opponent.avg.rating)
+```
+
+## Data PreProcessing 
+
+```{r}
+player.df <- cbind.data.frame(player.name, player.state, player.total.points, 
+                              player.prerating.score,round(opponent.avg.rating,0))
+head(player.df)
+```
+
+```{r}
+colnames(player.df)
+```
+
+```{r}
+play_final_df <- rename(player.df, opp.avg.rating='unlist.opponent.avg.rating.')
+colnames(play_final_df)
+```
+
+# Data Visualization
+
+
+```{r}
+ggplot(play_final_df, aes(player.prerating.score, opp.avg.rating, color = player.state)) + 
+           geom_point(aes(size = player.total.points, shape = player.state))+
+           ggtitle('Pre-rating Vs. Opponent Avg. Pre-rating')+
+           xlab('Pre-rating')+
+           ylab('Opponent Avg. Pre-rating')
+```
+
+# Export Data
+
+```{r}
+write.csv(player.df,'player_chess_data.csv')
+```
