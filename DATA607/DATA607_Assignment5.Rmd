@@ -1,0 +1,224 @@
+---
+title: "DATA607 Week 5 Assignment"
+author: "Keshaw Sahay"
+date: "February 29, 2020"
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    number_section:  true
+    theme: cerulean
+    highlight:  tango
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. The chart above describes arrival delays for two airlines across five destinations. Your task is to: <br>
+**Task#1: **  Create a .CSV file (or optionally, a MySQL database!) that includes all of the information above. You’re encouraged to use a “wide” structure similar to how the information appears above, so that you can practice tidying and transformations as described below. <br>
+**Task#2: ** Read the information from your .CSV file into R, and use tidyr and dplyr as needed to tidy and transform your data. <br>
+**Task#3: ** Perform analysis to compare the arrival delays for the two airlines. <br>
+**Task#4: ** Your code should be in an R Markdown file, posted to rpubs.com, and should include narrative <br> descriptions of your data cleanup work, analysis, and conclusions. Please include in your homework submission:
+
+# Data Acquisition
+
+```{r}
+library(knitr)
+flights.data = read.csv('https://raw.githubusercontent.com/keshaws/CUNY_MSDS_2020/master/DATA607/fligthts.csv',sep = ',')
+kable(flights.data)
+```
+
+# Environment Set Up
+
+```{r warning=FALSE, message=FALSE}
+library(tidyr)
+library(dplyr)
+```
+
+```{r}
+summary(flights.data)
+```
+
+# Tidying Data
+
+The dataset is untidy, so using gather function to convert the imported data into a 'tidy' format
+
+```{r}
+flight <- gather(flights.data, City, Flight_Count, Los.Angeles:Seattle)
+kable(flight)
+```
+
+#_Total number of flights by each carrier (airlines) to different destinations (Cities)_
+
+```{r}
+total.flights <- flight %>% group_by(Carrier) %>% 
+      summarize(Total_Flights = sum(Flight_Count))
+total.flights
+```
+
+#_On-time flights for each carrier_
+
+```{r}
+flights.ontime <- flight %>% group_by(Carrier) %>% 
+  filter(Status == 'on_time') %>% 
+  summarize(FlightsOnTime = sum(Flight_Count))
+flights.ontime
+```
+
+#_Delayed flights for each carrier_
+
+```{r}
+flights.delayed <- flight %>% group_by(Carrier) %>% 
+  filter(Status == 'delayed') %>% 
+  summarize(FlightsDelayed = sum(Flight_Count))
+flights.delayed
+```
+
+```{r}
+flights.info = cbind(flights.ontime,FlightsDelayed = flights.delayed$FlightsDelayed, TotalFlights=total.flights$Total_Flights)
+flights.info
+```
+
+```{r}
+flights.summary <- mutate(flights.info, PercentOnTime = FlightsOnTime/TotalFlights, PercentDelayed= FlightsDelayed/TotalFlights)
+flights.summary
+```
+
+# Analysis
+
+## EDA (Exploratory Data Analysis)
+
+```{r}
+Carrier.Alaska <- filter(flight, Carrier == 'Alaska')
+kable(Carrier.Alaska)
+```
+
+```{r}
+Carrier.AMWEST <- filter(flight, Carrier == 'AMWEST')
+kable(Carrier.AMWEST)
+```
+
+For Alaskan airlines which city had most number of delays:
+
+```{r}
+alaska.delays <- filter(Carrier.Alaska,Status=='delayed')
+city.alaska.delays <- alaska.delays %>%
+                      arrange(desc(alaska.delays$Flight_Count))
+kable(city.alaska.delays)
+```
+
+```{r}
+alaska.ontime <- filter(Carrier.Alaska,Status=='on_time')
+city.alaska.ontime.rank <- alaska.ontime %>%
+                      arrange(desc(alaska.ontime$Flight_Count))
+kable(city.alaska.ontime.rank)
+```
+
+```{r}
+city.amwest.delays <-  filter(Carrier.AMWEST, Status == 'delayed')
+city.amwest.delays <- city.amwest.delays %>%
+                      arrange(desc(city.amwest.delays$Flight_Count))
+kable(city.amwest.delays)
+```
+
+
+
+```{r}
+city.flight.delays <-  filter(flight, Status == 'delayed')
+city.flight.delays <- city.flight.delays %>%
+                    arrange(desc(city.flight.delays$Flight_Count))
+
+```
+
+
+```{r}
+kable(city.flight.delays)
+```
+
+
+```{r fig1, fig.height = 6, fig.width = 8}
+library(ggplot2)
+ggplot(data = city.flight.delays, aes(x=Carrier,y=Flight_Count))+
+  #geom_point(alpha = 0.5, size = 5, color ='blue')
+  geom_bar(stat = 'identity',aes(fill=Carrier))+
+  geom_text(aes(x = Carrier, y = Flight_Count, 
+                                    label = paste(Flight_Count),
+                                    group = Carrier,
+                                    vjust = -0.4)) +
+  labs(title = "Comparing Delays by Carrier & City", 
+                         x = "Carrier", 
+                         y = "Delay Flight Count") +
+  facet_wrap(~City, ncol = 5)+
+  theme_bw()
+```
+
+spread function to view the dataset for delayed flights
+
+```{r}
+flight.delay.spread <- spread(city.flight.delays,City, Flight_Count)
+```
+
+```{r}
+kable(flight.delay.spread)
+```
+
+
+```{r}
+flight.df <- flight %>%
+    spread(Status,'Flight_Count')
+kable(flight.df)
+```
+
+
+```{r}
+flight_percentile <- mutate(flight.df,delay_percent=round((delayed/(delayed+on_time)*100),2),
+                            onTime_percent=round((on_time/(delayed+on_time))*100,2))
+kable(flight_percentile)
+```
+
+
+
+```{r fig2, fig.height = 6, fig.width = 8}
+library(ggplot2)
+ggplot(data = flight_percentile, aes(x=Carrier,y=delay_percent))+
+  geom_bar(stat = 'identity',aes(fill=Carrier))+
+  geom_text(aes(x = Carrier, y = delay_percent, 
+                                    label = paste(delay_percent,'%'),
+                                    group = Carrier,
+                                    vjust = -0.4)) +
+  labs(title = "Comparing Delays(%) by Carrier & City", 
+                         x = "Carrier", 
+                         y = "Delay Percent") +
+  facet_wrap(~City, ncol = 5)+
+  theme_bw()
+```
+
+
+
+
+```{r fig3, fig.height = 6, fig.width = 8}
+library(ggplot2)
+ggplot(data = flight_percentile, aes(x=Carrier,y=onTime_percent))+
+  geom_bar(stat = 'identity',aes(fill=Carrier))+
+  geom_text(aes(x = Carrier, y = onTime_percent, 
+                                    label = paste(onTime_percent,'%'),
+                                    group = Carrier,
+                                    vjust = -0.4)) +
+  labs(title = "Comparing OnTime(%) by Carrier & City", 
+                         x = "Carrier", 
+                         y = "OnTime Percent") +
+  facet_wrap(~City, ncol = 5)+
+  theme_bw()
+```
+
+
+# Conclusion:
+ + San Fransicso has highest delay rate for both carriers
+ + Phoenix has highest on time rate for both carriers
+ + AMWEST has higher delay rate than Alaska across 5 cities
+
