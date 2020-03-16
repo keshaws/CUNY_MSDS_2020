@@ -1,0 +1,39 @@
+{"books":[
+	{
+		"Title": "The 4 Disciplines of Execution: Achieving Your Wildly Important Goals",
+		"Authors": "Chris McChesney",
+		"Type": "Paperpack",
+		"Length": "288",
+		"AmazonRating": "4.5"
+	},
+	{
+		"Title": "Change or Die The Three Keys to Change at Work and in Life",
+		"Authors": "Alan Deutschman",
+		"Type": "Paperpack",
+		"Length": "256",
+		"AmazonRating": "4.5"
+	},
+	{
+		"Title": "R for Data Science: Import, Tidy, Transform, Visualize, and Model Data",
+		"Authors": ["Hadley Wickham","Garrett Grolemund"],
+		"Type": "Paperpack",
+		"Length": "522",
+		"AmazonRating": "4.5"
+	},
+	{
+		"Title": "Data Science for Business: What You Need to Know about Data Mining and Data-Analytic Thinking",
+		"Authors": ["Foster Provost","Karen Dillon","Tom Fawcett"],
+		"Type": "Paperpack",
+		"Length": "414",
+		"AmazonRating": "4.5"
+	},
+	{
+		"Title": "Upstream: The Quest to Solve Problems Before They Happen",
+		"Authors": "Dan Heath",
+		"Type": "Paperpack",
+		"Length": "320",
+		"AmazonRating": "4.5"
+	}
+	
+	]
+}
