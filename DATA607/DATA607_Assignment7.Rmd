@@ -1,0 +1,89 @@
+---
+title: "DATA607 - Week 7 Assignment"
+author: "Keshaw Sahay"
+date: "March 15, 2018"
+Dataset: "Working with HTML, XML and JSON"
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    number_section:  true
+    theme: cerulean
+    highlight:  tango
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. Pick three of your favorite books on one of your favorite subjects. At least one of the books should have more than one author. For each book, include the title, authors, and two or three other attributes that you find interesting. <br>
+Take the information that you’ve selected about these three books, and separately create three files which store the book’s information in HTML (using an html table), XML, and JSON formats (e.g. “books.html”, “books.xml”, and “books.json”). <br>
+Write R code, using your packages of choice, to load the information from each of the three sources into separate R data frames. Are the three data frames identical?
+
+
+```{r warning=FALSE, message=FALSE}
+library(XML)
+library(RCurl)
+library(rjson)
+library(rvest)
+library(rlist)
+library(plyr)
+library(jsonlite)
+library(knitr)
+library(stringr)
+```
+
+# HTML- books.html
+
+```{r}
+html.url <- "https://raw.githubusercontent.com/keshaws/CUNY_MSDS_2020/master/DATA607/books.html"
+html.file <- getURLContent(url = html.url)
+books.html <-  html.file %>%
+                readHTMLTable()
+books.html.df <- as.data.frame(books.html)
+colnames(books.html.df) <- str_replace(colnames(books.html.df),"NULL\\.", "")
+colnames(books.html.df) <- str_replace(colnames(books.html.df),"\\.", " ")
+kable(books.html.df)
+dim(books.html.df)
+```
+
+# XML-books.xml
+
+```{r}
+xml.url <- "https://raw.githubusercontent.com/keshaws/CUNY_MSDS_2020/master/DATA607/books.xml"
+xml.file <- getURLContent(xml.url)
+xml.df <- xml.file %>%
+  xmlParse() %>%
+  xmlToDataFrame()
+dim(xml.df)
+kable(xml.df)
+```
+
+# XML-books.json
+
+```{r}
+json.url <- "https://raw.githubusercontent.com/keshaws/CUNY_MSDS_2020/master/DATA607/books.json"
+json.file <- getURLContent(json.url)
+json.df <- as.data.frame(fromJSON(json.file[[1]]))
+colnames(json.df) <- str_replace(colnames(json.df),"books\\.", "")
+colnames(json.df) <- str_replace(colnames(json.df),"\\.", " ")
+dim(json.df)
+kable(json.df)
+```
+
+```{r}
+books.html.df ==json.df
+```
+
+```{r}
+json.df==xml.df
+```
+
+<div id="info">
+We have successfully handled all three data file formats: html, xml and json format. We can see that all three data frames: html, xml, json are not identicial. 
+</div>
+
