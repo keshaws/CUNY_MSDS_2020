@@ -1,0 +1,219 @@
+---
+title: "DATA607 - Project-3"
+author: "Keshaw Sahay"
+date: "March 22, 2020"
+Dataset: "DATA607 - Project-3"
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    number_section:  true
+    theme: cerulean
+    highlight:  tango
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+```{r setup, include=FALSE}
+library(knitr)
+library(tidyverse)
+library(DT)
+library(kableExtra)
+library(reshape)
+library(grid)
+library(gridExtra)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<br>
+
+# Data Acquisition
+
+The data set used in this project is [Kaggle ML and Data Science Survey 2017](https://www.kaggle.com/kaggle/kaggle-survey-2017/feed). I downloaded the multiple choice item survey results in csv format and placed it in a GitHub repo (https://github.com/keshaws/CUNY_MSDS_2020/tree/master/DATA607)
+
+Importing Multiple Choice data
+
+```{r message=FALSE, warning=FALSE }
+surverydata_link<-"https://raw.githubusercontent.com/keshaws/CUNY_MSDS_2020/master/DATA607/multipleChoiceResponses.csv"
+surverydata_df<-read_csv (surverydata_link)
+survey.data <- surverydata_df
+#lets create a unique ID variable 
+surverydata_df$id <- seq.int(nrow(surverydata_df))
+dim(surverydata_df)
+```
+
+
+<br>
+
+# Research Question
+
+**Which are the most values data science skills?**
+
+
+## Understanding Features 
+
+Let's start gaining some insignts by exploring demographics features of the dataset
+
+
+```{r warning=FALSE, cache=FALSE, message=FALSE}
+
+survey.demographics <- survey.data%>%
+  select(GenderSelect,Country,Age,EmploymentStatus) %>%
+  filter(Country!='NA',trimws(Country)!='',Age!='NA',trimws(GenderSelect) %in% c('Male','Female'))
+
+survey.dem.age.plot <- survey.demographics %>%
+    group_by(Age,GenderSelect) %>%
+    summarise(count=n()) %>%
+    arrange(desc(count))
+
+survey.dem.plot <- survey.demographics %>%
+  group_by(Age,Country,GenderSelect,EmploymentStatus) %>%
+  summarise(count=n()) %>%
+  arrange(desc(count))
+
+```
+
+```{r}
+survey.dem.gen.plot <- survey.demographics %>%
+    group_by(GenderSelect) %>%
+    summarise(count=n()) %>%
+    arrange(desc(count))
+head(survey.dem.gen.plot)
+```
+
+Tidying the dataset and finding the percentile for each gender group
+
+```{r}
+survey.dem.tidy <- survey.dem.gen.plot %>%
+    spread(GenderSelect,'count')
+head(survey.dem.tidy)
+```
+
+
+```{r}
+gender_percentile <- mutate(survey.dem.tidy,male_percent=round((Male/(Female+Male)*100),2),
+                            female_percent=round((Female/(Female+Male))*100,2))
+kable(gender_percentile)
+```
+
+
+```{r fig01,  echo=FALSE,warning=FALSE,fig.height = 10, fig.width = 8}
+library(ggplot2)
+ggplot(data = survey.dem.plot, aes(x=GenderSelect,y=count))+
+  geom_bar(stat = 'identity',aes(fill=GenderSelect))+
+  facet_wrap(~EmploymentStatus, ncol = 2)+
+  theme_bw()
+
+``` 
+
+
+There are 16716 survey respondents and we could see that there is a huge gender gap in the given dataset with over 83% are male and female makes up only ~17% of total. Also, most of respondents are full time employed followed by people who are not employed but looking for work. 
+
+
+# EDA 
+
+Let's take a look at data science activity attributes: TimeGatheringData,TimeModelBuilding,TimeProduction,,TimeVisualizing,
+,TimeFindingInsights.
+
+## Data Science Activities
+
+The US reponsdents data analysis show that gathering data is the main activitiy with higest time consumption 37.75%. The model building ranks 2nd, 19.23%, followed by time spent in finding insights and data visualization. Only 10.22% of total appears to be taken by prodcution activities. 
+
+
+```{r fig02, echo=FALSE,warning=FALSE, cache=FALSE, message=FALSE}
+
+survey.data.ds.activities <- survey.data %>%
+    select(GenderSelect,Country,Age,EmploymentStatus,PublicDatasetsSelect,FormalEducation,MajorSelect,
+           DataScienceIdentitySelect,CurrentJobTitleSelect,
+          TimeGatheringData,TimeModelBuilding,TimeProduction,TimeVisualizing,TimeFindingInsights) %>%
+          filter(Age!='NA',Country!='NA',Country!='',GenderSelect %in% c('Male', 'Female'),
+          TimeGatheringData!='NA',TimeModelBuilding!='NA',TimeProduction!='NA',TimeVisualizing!='NA',
+          TimeFindingInsights!='NA',MajorSelect!='',PublicDatasetsSelect!='NA',
+          FormalEducation %in% c('Master\'s degree', 'Doctoral degree', 'Bachelor\'s degree')
+          )
+
+survey.data.ds.activities$dsid <- seq.int(nrow(survey.data.ds.activities))
+
+ds.act.tidy <- survey.data.ds.activities %>%
+          gather( DSActivity,act_count,TimeGatheringData:TimeFindingInsights) %>%
+          arrange(dsid)
+ds.act.df <- ds.act.tidy %>%
+    select(dsid,Country,EmploymentStatus,DSActivity,act_count) %>%
+    group_by(DSActivity)
+
+#kable(head(ds.act.df))
+
+ds.act.us <- filter(ds.act.df,Country=='United States')
+ds.act.us.plot <- ds.act.us %>%
+    group_by(DSActivity) %>%
+    summarise(mean_precent=mean(act_count))
+
+ds.act.us.plot.df <-  ds.act.us.plot %>%   
+  arrange(desc(mean_precent))
+kable(ds.act.us.plot.df)
+```
+
+
+```{r fig03, fig.height = 5, fig.width = 7, fig.align = "center" , message= FALSE, echo=FALSE}
+ggplot(data = ds.act.us.plot,aes(DSActivity,mean_precent))+
+  geom_bar(stat = 'identity',aes(fill=DSActivity))+  
+  geom_text(aes(x = DSActivity, y = mean_precent, label = paste(round(mean_precent,2),'%'),
+                                    group = DSActivity,vjust = -0.2))+
+  labs(title = "Comparing Data Science Activities (Country:US)",x = "Data Science Activities", y = "Time Spent in %") +
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 65, hjust = 1),legend.position = 'none')
+```
+
+## Learning platform 
+
+
+```{r fig04, echo=FALSE,warning=FALSE, cache=FALSE, message=FALSE}
+survey.data.learning <- survey.data %>%
+    select(GenderSelect,Country,Age,EmploymentStatus,StudentStatus,LearningDataScience,CareerSwitcher,PublicDatasetsSelect,
+           FormalEducation,MajorSelect,DataScienceIdentitySelect,CurrentJobTitleSelect,WorkChallengesSelect,
+           LearningPlatformSelect,LearningPlatformUsefulnessArxiv,LearningPlatformUsefulnessBlogs,LearningPlatformUsefulnessCollege,
+           LearningPlatformUsefulnessCompany,LearningPlatformUsefulnessConferences,LearningPlatformUsefulnessFriends,
+           LearningPlatformUsefulnessKaggle,LearningPlatformUsefulnessNewsletters,LearningPlatformUsefulnessCommunities,
+           LearningPlatformUsefulnessDocumentation,LearningPlatformUsefulnessCourses,LearningPlatformUsefulnessProjects,
+           LearningPlatformUsefulnessPodcasts,LearningPlatformUsefulnessSO,LearningPlatformUsefulnessTextbook,
+           LearningPlatformUsefulnessTradeBook,LearningPlatformUsefulnessTutoring,LearningPlatformUsefulnessYouTube,
+           BlogsPodcastsNewslettersSelect,LearningDataScienceTime) %>%
+    filter(Age!='NA',Country!='NA',Country!='',GenderSelect %in% c('Male', 'Female'))
+survey.data.learning$lid <- seq.int(nrow(survey.data.learning))
+
+survey.data.learning.tidy <- gather(survey.data.learning, LPlatform,LP_count,
+                                    LearningPlatformUsefulnessArxiv:LearningPlatformUsefulnessYouTube) %>%
+                          arrange(lid)
+
+survey.data.learn.df  <- survey.data.learning.tidy %>%
+    select(lid,Country,EmploymentStatus,LPlatform,LP_count) %>%
+    group_by(LPlatform)
+
+learn.df <- survey.data.learn.df %>%
+    filter(LP_count!='NA', LP_count!='')
+
+#learn.df <- rename(learn.df,LearnerRemarks=LP_count)
+
+ds.learn.us <- filter(learn.df,Country=='United States')
+ds.learn.us.plot <- ds.learn.us %>%
+    group_by(LPlatform) 
+ds.learn.us.plot.df <- ds.learn.us.plot %>%
+    mutate(LearningPlatform=substr(LPlatform,27,length(LPlatform))) 
+kable(head(ds.learn.us.plot.df))
+```
+
+
+```{r fig05, fig.height = 7, fig.width = 8 , fig.align = "center" , message= FALSE, echo=FALSE}
+ggplot(data = ds.learn.us.plot.df,aes(LearningPlatform,LP_count))+
+  geom_bar(stat = 'identity',aes(fill=LP_count))+  
+    labs(title = "Learning Platform Usage and Remarks (Country:US)", 
+                         x = "Learning Platform Type", 
+                         y = "Learners Sentiments") +
+theme_bw()+
+theme(axis.text.x = element_text(angle = 65, hjust = 1),axis.text.y=element_blank(),axis.ticks.y=element_blank())
+```
+
+The survery reespondents used different learning platform and it appears that learners mostly benefited from personal projects as majority of resonse indicate it very useful. Online courses appears to be 2nd very useful only to be followed by StackOverflow and Kaggle. Blogs,textbooks and college also appear to be very userful whereas newsletters, podcasts and tradebook rank low. 
