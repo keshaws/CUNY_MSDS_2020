@@ -1,0 +1,109 @@
+---
+title: "DATA607 - Week 9 Assignment"
+author: "Keshaw Sahay"
+date: "March 29, 2018"
+Dataset: "Working with Web APIs"
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    number_section:  true
+    theme: cerulean
+    highlight:  tango
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+1. The New York Times web site provides a rich set of APIs, as described here: http://developer.nytimes.com/docs
+You all need to start by signing up for an API key.
+Your task is to choose one of the New York Times APIs, construct an interface in R to read in the JSON data, and transform it to an R dataframe. 
+
+```{r echo=FALSE,warning=FALSE, cache=FALSE, message=FALSE}
+library(jsonlite)
+library(rjson)
+library(tidyverse)
+library(RCurl)
+library(DT)
+apikey <- "GtPZ6gvZvQKtJ1Vkyq72iLAAVDEIbHDf"
+
+```
+
+
+# NYTimes web and developer API Key
+Per NYTimes documentaion, we need to obtain the API key by registering as a developer at NYTimes developer webstite. 
+<br> 
+Getting Started: 
+The Times Developer Network is our API clearinghouse and community. Here's how to get started:
+
+* Request an API key
+* Read the API documentation, FAQ and Terms of Use
+* Use the API Tool associated with each API to experiment without writing code
+
+# NYTimes Top Stories
+```{r}
+
+baseurl <- "https://api.nytimes.com/svc/topstories/v2/home.json?"
+limit <- 20
+url <- paste0(baseurl, "&api-key=", apikey) 
+
+# Issue the query:
+nyt.json <- fromJSON(file = url)
+
+class(nyt.json)
+
+
+nyt.json$status
+summary(nyt.json)
+length(nyt.json$results)
+names(nyt.json$results[[1]])
+```
+
+Now Instantiating a nyt dataframe to store json response 
+```{r}
+nyt.data.df <- data.frame(
+    id=numeric(),
+    section = character(),
+    title=character(),
+    url= character(),
+    author = character(),
+    published_date =character()
+  )
+
+for(i in 1:length(nyt.json$results)){    
+      id <- as.numeric(i)
+      section <- nyt.json$results[[i]]$section
+      title <- nyt.json$results[[i]]$title
+      url <- nyt.json$results[[i]]$url
+      author<- nyt.json$results[[i]]$byline
+      published_date <- nyt.json$results[[i]]$published_date
+           nyt.data.df <- rbind(nyt.data.df,(cbind(id,section,title,url,author,published_date)),stringsAsFactors = F)
+}
+
+
+DT::datatable(nyt.data.df, options = list(pageLength = 5))
+
+```
+
+# EDA -  NYTimes Top Stories
+
+```{r echo=FALSE,warning=FALSE, cache=FALSE, message=FALSE}
+library(ggplot2)
+ggplot(nyt.data.df,aes(x=section))+
+  geom_bar(aes(section, fill = ..count..))+
+  labs(title = "NYTimes Article: Top Stories", 
+                         x = "Article Section", 
+                         y = "Total Count") +
+  theme_bw()+
+theme(axis.text.x = element_text(angle = 65, hjust = 1))
+
+```
+
+
+
