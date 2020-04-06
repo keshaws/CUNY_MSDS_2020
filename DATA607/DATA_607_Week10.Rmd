@@ -1,0 +1,216 @@
+---
+title: "DATA_607_Week10"
+author: "Keshaw Sahay"
+date: "April 5, 2020"
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    number_section:  true
+    theme: cerulean
+    highlight:  tango
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Exercise
+
+In Text Mining with R, Chapter 2 looks at Sentiment Analysis. In this assignment, you should start by getting the primary example code from chapter 2 working in an R Markdown document. You should provide a citation to this base code. You’re then asked to extend the code in two ways:
+
+Work with a different corpus of your choosing, and
+
+Incorporate at least one additional sentiment lexicon (possibly from another R package that you’ve found through research).
+
+As usual, please submit links to both an .Rmd file posted in your GitHub repository and to your code on rpubs.com. You may work as a small team on this assignment.
+
+Note: If you initially encounter problems loading AFINN, you will need to accept the license for the lexicon by typing in the console for R Markdown.
+
+
+
+```{r message=FALSE, warning=FALSE}
+library(tidytext)
+library(dplyr)
+library(tidyverse)
+```
+
+# Example from the Textbook
+
+```{r}
+library(stringr)
+library(janeaustenr)
+library(ggplot2)
+
+get_sentiments("afinn")
+```
+
+
+```{r}
+tidy_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(linenumber = row_number(),
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]", 
+                                                 ignore_case = TRUE)))) %>%
+  ungroup() %>%
+  unnest_tokens(word, text)
+```
+
+
+
+```{r}
+unique(tidy_books$book)
+```
+
+
+```{r}
+sns <- tidy_books %>% 
+  filter(book == "Sense & Sensibility")
+
+sns
+```
+
+
+```{r}
+library(tidyr)
+
+sns_sentiment <- sns %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(book, index = linenumber %/% 80, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+```
+```{r}
+sns_sentiment
+```
+
+
+```{r}
+library(ggplot2)
+
+ggplot(sns_sentiment, aes(index, sentiment, fill = book)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~book, ncol = 2, scales = "free_x")
+```
+
+
+# NRC Sentiment Lexicon 
+
+```{r}
+get_sentiments("nrc")
+```
+
+# Corpus
+Using Harrypotter library for sentiments analysis  (https://afit-r.github.io/sentiment_analysis)
+
+```{r}
+#devtools::install_github("bradleyboehmke/harrypotter") 
+```
+```{r}
+library(harrypotter) 
+```
+
+Sample Corpus
+```{r}
+order_of_the_phoenix[1:1]
+```
+
+Using harrpotter example code for analysis
+
+```{r}
+titles <- c("Order of the Phoenix")
+books <- list(order_of_the_phoenix)
+series <- tibble()
+
+for(i in seq_along(titles)) {
+  
+  temp <- tibble(chapter = seq_along(books[[i]]),
+                  text = books[[i]]) %>%
+    unnest_tokens(word, text) %>%
+    mutate(book = titles[i]) %>%
+    select(book, everything())
+  
+  series <- rbind(series, temp)
+}
+series$book <- factor(series$book, levels = rev(titles))
+series
+```
+
+# Sentiment Analysis 
+
+Analyzing using AFFIN lexicon
+```{r}
+afinn <- series %>%
+        group_by(book) %>% 
+        mutate(word_count = 1:n(),
+               index = word_count %/% 500 + 1) %>% 
+        inner_join(get_sentiments("afinn")) %>%
+        group_by(book, index) %>%
+        summarise(sentiment=sum(score)) %>%
+        mutate(method = "AFINN")
+afinn
+```
+
+Now, using NRC lexicon for sentiment analysis.
+
+```{r}
+nrc <- series %>%
+  right_join(get_sentiments("nrc")) %>%
+  filter(!is.na(sentiment)) %>%
+  count(sentiment, sort = TRUE)
+
+nrc
+```
+
+Alsotaking a look at loughran lexicon for sentiment analysis.
+
+```{r}
+loughran <- series %>%
+  right_join(get_sentiments("loughran")) %>%
+  filter(!is.na(sentiment)) %>%
+  count(sentiment, sort = TRUE)
+loughran
+```
+
+```{r}
+nrc_final <- bind_rows(series %>%
+                  group_by(book) %>% 
+                  mutate(word_count = 1:n(),
+                         index = word_count %/% 500 + 1) %>%
+                  inner_join(get_sentiments("nrc") %>%
+                                     filter(sentiment %in% c("positive", "negative"))) %>%
+                  mutate(method = "nrc")) %>%
+        count(book, method, index = index , sentiment) %>%
+        ungroup() %>%
+        spread(sentiment, n, fill = 0) %>%
+        mutate(sentiment = positive - negative) %>%
+        select(book, index, method, sentiment)
+```
+
+```{r}
+bind_rows(afinn,
+          nrc_final) %>%
+        ungroup() %>%
+        mutate(book = factor(book, levels = titles)) %>%
+  ggplot(aes(index, sentiment, fill = method)) +
+  geom_bar(alpha = 0.8, stat = "identity", show.legend = FALSE) +
+  facet_grid(book ~ method)
+```
+
+#Conclusion
+
+Both lexicons Affin and NRC have mixed sentiment trends. However, NRC appears to have more negative sentiments with respect to AFFIN.
+
+# Reference
++ https://www.tidytextmining.com/sentiment.html
++ https://cran.r-project.org/web/packages/harrypotter/index.html
++ https://github.com/aljrico/harrypotter
++ https://www.rdocumentation.org/packages/tidytext/versions/0.2.3/topics/get_sentiments
++ https://afit-r.github.io/sentiment_analysis
+
+
+
