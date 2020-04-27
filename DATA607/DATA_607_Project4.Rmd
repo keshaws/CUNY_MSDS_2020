@@ -1,0 +1,183 @@
+---
+title: "DATA_607_Project4"
+author: "Keshaw KSahay"
+date: "April 25, 2020"
+output:
+  html_document:
+    highlight: pygments
+    theme: cerulean
+  pdf_document: default
+---
+
+1. It can be useful to be able to classify new "test" documents using already classified "training" documents.  A common example is using a corpus of labeled spam and ham (non-spam) e-mails to predict whether or not a new document is spam. 
+
+For this project, you can start with a spam/ham dataset, then predict the class of new documents (either withheld from the training dataset or from another source such as your own spam folder).   One example corpus:  http://spamassassin.apache.org/old/publiccorpus/
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+####_Environment Set Up_
+
+
+```{r warning=FALSE,include=FALSE}
+library(tm)
+library(RTextTools)
+library(knitr)
+library(tidyverse)
+library(kableExtra)
+library(tidytext)
+```
+####_Data Acquisition_
+source: http://spamassassin.apache.org/old/publiccorpus/ 
+```{r}
+
+ham.corpus <- VCorpus(DirSource('C:\\DATA607\\easy_ham'))
+spam.corpus <- VCorpus(DirSource('C:\\DATA607\\spam_2'))
+```
+
+####_Data Wrangling_
+exploring corpus to view the content and metadata information.
+
+```{r}
+text_df <- data_frame( text = ham.corpus[1])
+text_df
+```
+
+
+```{r}
+print(ham.corpus)
+inspect(ham.corpus[1:4])
+```
+
+Combining both 'spam' and 'ham' corpus together using metadata information and preparing the combined corpus for further cleaning
+
+```{r}
+meta(spam.corpus, tag = "type") <- "spam"
+meta(ham.corpus, tag = "type") <- "ham"
+corpus_clean <- c(spam.corpus, ham.corpus)
+corpus_clean <- tm_map(corpus_clean, content_transformer(function(x) iconv(x, "UTF-8", sub="byte")))
+```
+
+converting entire corpus content to lower case
+
+```{r}
+corpus_clean <- tm_map(corpus_clean, content_transformer(tolower))
+#as.character(corpus_clean[[1]])
+```
+
+Pre-processing text data (corpus cleaning), using basic tm fucntions such as getting rid of stop words, punctuation removal, whitespce removal. 
+
+```{r}
+corpus_clean <- tm_map(corpus_clean, removeNumbers)
+corpus_clean <- tm_map(corpus_clean, removeWords,stopwords("english"))
+corpus_clean <- tm_map(corpus_clean, removePunctuation)
+corpus_clean <- tm_map(corpus_clean, stripWhitespace)
+as.character(corpus_clean[[1]])
+```
+
+Storing pre processed text data into Document Term Matrix  (dtm)
+
+```{r}
+dtm <- DocumentTermMatrix(corpus_clean)
+dtm
+```
+
+```{r}
+meta_type <- as.vector(unlist(meta(corpus_clean)))
+meta_data <- data.frame(type = unlist(meta_type))
+table(meta_data)
+```
+
+```{r}
+inspect(corpus_clean[1:2])
+
+corpus_clean[[1]]
+```
+
+```{r}
+#dtm <- removeSparseTerms(dtm, 1-(10/length(corpus_clean)))
+#dtm
+```
+####_Tidying Text Data_
+Using tidytext library to tify the the dtm text data and then arranging the  
+```{r}
+corpus.tidy <- tidy(dtm)
+head(corpus.tidy )
+corpus.tidy.sort <- corpus.tidy  %>%
+  arrange(desc(count))
+kable(head(corpus.tidy.sort))
+```
+
+```{r}
+inspect(dtm)
+```
+Finding top 5 term in the tidy text
+
+```{r}
+term.frequency <- corpus.tidy.sort%>%
+  select(term,count) %>%
+  group_by(term) %>%
+  summarise(termFrequency = sum(count)) %>%
+  arrange(desc(termFrequency))
+kable(head(term.frequency))
+```
+
+```{r fig.height=6,fig.width=8}
+ggplot(data=filter(term.frequency,termFrequency>4000), aes(x = term, y = termFrequency)) +
+  geom_bar(stat = "identity", aes(fill=termFrequency)) +
+  geom_text(aes(label=termFrequency), vjust=-0.2)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 65, hjust = 1),legend.position = 'none')
+```
+
+####_Model & Prediction (Text Classifier)_
+
+Preparing training and test dataset
+
+```{r}
+#Toal datset size
+totalSize <- (round(length(meta_type)))
+totalSize
+# 70% training dataset
+traindata.size <-(round(length(meta_type)*.7))
+traindata.size
+# 30% test  dataset
+paste0('test data point starts from ',round(length(meta_type)*.7)+1, ' and ends at ',totalSize)
+```
+
+
+```{r}
+# Process dataset in container for model fitment
+data.train.test.container <- create_container(dtm, labels = meta_type, trainSize = 1:traindata.size,testSize = (round(length(meta_type)*.7)+1):totalSize, virgin = FALSE)
+
+```
+```{r}
+slotNames(data.train.test.container)
+```
+
+#####_SVM Model Evaluation_
+```{r}
+svm.model <- train_model(data.train.test.container, "SVM")
+svm.predict <- classify_model(data.train.test.container, svm.model)
+```
+
+```{r}
+data.label.svm <- data.frame(
+  correct_label = meta_type[2765:3948],
+  svm = as.character(svm.predict[,1]),
+  stringsAsFactors = F)
+```
+
+```{r}
+table(data.label.svm[,1] == data.label.svm[,2])
+```
+
+```{r}
+prop.table(table(data.label.svm[,1] == data.label.svm[,2]))
+```
+
+####_Conclusion_
+SVM Model appears to be an efficient classifier for the given text dataset. 
+
