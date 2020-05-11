@@ -1,0 +1,433 @@
+---
+title: "DATA 607 Final Project"
+author: "Keshaw K Sahay"
+date: "May 10, 2020"
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    number_section:  true
+    theme: cerulean
+    highlight:  tango
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r global_options, echo=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+```{r setup, include=FALSE,echo=FALSE,warning=FALSE}
+library(knitr)
+library(tidyverse)
+library(DT)
+library(kableExtra)
+library(dplyr)
+library(pool)
+library(ggplot2)
+library(stringr)
+library(DBI)
+library(knitr)
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+<br>
+
+# NYC Open data Analysis (311 Service Request)
+
+NYC Open data is a city initiative and a powerful tool which ensures transparency and fosters civic innovation within our NYC to help and improve the quality of life for millions of New Yorkers. 
+Every day, NYC311 receives hundreds of thousands of requests from New Yorkers related to several types of service which city provides through city agencies. The NYC officials respond to the requests and tried to close the issues as soon as they can. The data is publically available and also accessible online.
+
+# Motivation
+
+NYC 311 data is available from 2010 onwards and it is truly a BIG Data analytics dataset. I would like to take this an opportunity to understand the NYC311 service request data better by understanding the numerous types of requests and how they are handled by city agencies. 
+
+# Data Sources 
+
+The data provided by 311 open data can be downloaded from NYC open data portal. 
+
+* The data can be exported in csv format from https://data.cityofnewyork.us 
+
+# Goal
+
+*	Make use of both exported data in csv format and APIs and use them appropriately as needed
+*	Wrangle wide NYC 311 dataset 
+*	Visualize using ggplot and other visualization techniques
+*	Perform statistical analysis
+*	Analyze data to find the trend based upon request attributes:
+    + Types of request
+    + Request status such as closed time, open, pending etc
+*	Try to create a complaint map and also visualize most common or least common complaints for historical and daily data
+
+
+# Data Acquisition (BIG Data Analytics Platform)
+
+A fully automated data pipeline is built to acquire data directly from NYC Open Data portal. The data has been moved Amazon EMR (Elastic Map Reduce, Hadoop ) for Big Data Analytics purpose. 
+
++ Fired up an **AWS EC2** instance with **Hadoop, Spark and R** 
++ Loaded gigabytes of 311 data as a CSV with automated data pipeline.
++ Moved the CSV into **HDFS** (Hadoop Distributed File System)
++ Used SparklyR to read the data in efficient manner and crunched the data using **Spark** functions and **dplyr**
++ Data is transformed and aggregated datasets are loaded into **Amazon RDS** (MySQL)
+
+
+```{r include=FALSE, echo=FALSE, warning=FALSE}
+
+my_db <- dbConnect (
+  RMySQL::MySQL(), 
+  host='aws-mysql.cparajtogjuc.us-east-2.rds.amazonaws.com',
+  port=3306,
+  dbname="db607",
+  user="user607",
+  password="dsdata607"
+)
+
+```
+
+
+```{r}
+
+library(dplyr)
+
+nyc.comp.trend <- tbl(my_db,"nyc.data.df.clean.final") %>%
+  dplyr::rename(ComplaintType='CompliantType') %>%
+  filter(Borough!='Unspecified') %>%
+  collect()
+```
+
+# EDA (Exploratory Data Analysis)
+The dataset has over 20 million data points and 14 features. Let's take a look at the dataset and try to gain some insight. 
+
+Here are the list of 20 NYC Agencies available in the dataset:
+
+```{r}
+unique(nyc.comp.trend$Agency)
+```
+
+Let's understand the dataset first and explore availabe feautres. 
+```{r echo=FALSE}
+nrow(nyc.comp.trend)
+kable(head(nyc.comp.trend))
+```
+
+## NYC Complaint Types and Trends
+
+It's pretty evident that number of complaints have gone up in total over the period of time. The data from 2010 to 2017 definitely supports that fact and there is clear updward trend . The data for 2018 is not complete but it appears that first 4-5months of the year 2018 had not much complaint registered.
+
+```{r echo=FALSE}
+nyc.data.compType <- nyc.comp.trend %>%
+  select(ComplaintType,Borough,Cryear) %>%
+  group_by(Cryear) %>%
+  summarise(TotalCount=n()) %>%
+  arrange(desc(TotalCount))
+
+```
+
+```{r  echo=FALSE, fig.width=8,fig.height=6, fig.align='center'}
+ggplot(nyc.data.compType,aes(x=Cryear,y=TotalCount,group=1))+
+  geom_line(color='red')+
+  geom_point(alpha = 0.5, size = 3, color ='blue')+
+  labs(title = "NYC 311 Data Trend", 
+                         x = "Year", 
+                         y = "Total Number of Complaints") +
+  geom_text(aes(x = Cryear, y = TotalCount, 
+                                    label = paste(TotalCount),
+                                    vjust = -0.5))+
+  theme_bw()
+```
+
+The percent change plot also indicates clear incerase in number of complaints over the 
+There is clear upward percent increase trend and is highest for Statan Island for year 2017 from previous year. <br>
+
+**For year 2016-2017**
+
+*	Staten Island has highest, almost 17% increase in number of complaints from 16.65% to 33.59%
+*	Manhattan has ~10% less complaints registered
+*	Bronx has lowest % increase ~3%
+
+
+```{r echo=FALSE,include=FALSE}
+comp.pcnt <-  nyc.comp.trend %>%
+  select(ComplaintType,Borough,Cryear) %>%
+  group_by(Borough,Cryear) %>%
+  summarise(TotalCount=n()) %>%
+  mutate(meanCount = round(mean(TotalCount))) %>%
+  mutate(  PercentChange= round((TotalCount-meanCount)/meanCount*100,2))     %>%
+  arrange(desc(TotalCount))
+
+#nrow(comp.pcnt)
+#(comp.pcnt)
+```
+
+
+```{r echo=FALSE ,fig.width=14,fig.height=10}
+library(ggplot2)
+ggplot(data = comp.pcnt, aes(x=Cryear,y=PercentChange))+
+  geom_bar(stat = 'identity',aes(fill=Cryear))+
+  geom_text(aes(x = Cryear, y = PercentChange, 
+                                    label = paste(PercentChange,'%'),
+                                    group = Borough,
+                                    vjust = -0.4)) +
+  labs(title = "Comparing Complaints Percent(%) Change by Boroughs", 
+                         x = "Year", 
+                         y = "Percent Change") +
+  facet_wrap(~Borough, ncol = 3)+
+  theme_bw()
+```
+
+## NYC 311 Complaints handeled by NYC Agencies
+
+From the below plot it appears that NYPS and HPD are definitely top 2 agencies who are handling more number of 311 complaints.
+
+```{r echo=FALSE,include=FALSE}
+nyc.comp.ag<- nyc.comp.trend %>%
+    select(Agency,Cryear)%>%
+    group_by(Agency,Cryear)%>%
+    summarise(TotalCount=n())%>%
+    arrange(desc(TotalCount))
+```
+
+```{r  echo=FALSE, fig.width=10,fig.height=12, fig.align='center'}
+ 
+ggplot(data=nyc.comp.ag, aes(x = Cryear, y =TotalCount )) +
+  geom_bar(aes(fill=TotalCount),stat = "identity", show.legend = F) +
+  labs(title = "NYC Agencies and 311 Complaints", 
+                         x = "Year", 
+                         y = "Total Number Of Complaints")+
+  theme_bw() +
+            theme(axis.line = element_line(color = "black"), axis.text.x = element_text(angle = 65, hjust = 1))+
+  facet_wrap(~Agency,ncol = 3)
+```
+
+So, let's explore NYPD 311 data and see which borough has more number of complaints. All boroughs appear to have upaward trend and Brooklyn & Queens are topping the list. 
+
+```{r echo=FALSE}
+nyc.comp.agency <- nyc.comp.trend %>%
+    select(Agency,Borough,Cryear)%>%
+    group_by(Agency,Borough,Cryear)%>%
+    summarise(TotalCount=n())%>%
+    arrange(desc(TotalCount))
+
+kable(head(nyc.comp.agency,10))
+```
+
+```{r echo=FALSE, fig.width=8,fig.height=6,fig.align='center'}
+ ggplot(data=filter(nyc.comp.agency,Agency=='NYPD'), aes(x = Cryear, y =TotalCount )) +
+  geom_bar(aes(fill=TotalCount),stat = "identity", show.legend = F) +
+    labs(title = "NYPD 311 Complaints", 
+                         x = "Year", 
+                         y = "Total Number Of Complaints")+
+  theme_bw() +
+            theme(axis.line = element_line(color = "black"), axis.text.x = element_text(angle = 65, hjust = 1))+
+  facet_wrap(~Borough)
+
+```
+
+After analyzing NYPD and HPD complaints in detail it appears that complaints handeled by NYPD has a very clear upward trend whereas HPD data distribution for % change over the period of time appears to be a normal distribution.
+
+```{r echo=FALSE, include=FALSE}
+comp.agency.pcnt <-  nyc.comp.trend %>%
+  select(ComplaintType,Agency,Cryear) %>%
+  group_by(Agency,Cryear) %>%
+  summarise(TotalCount=n()) %>%
+  mutate(meanCount = round(mean(TotalCount))) %>%
+  mutate(  PercentChange= round((TotalCount-meanCount)/meanCount*100,2))     %>%
+  arrange(desc(TotalCount))
+
+#nrow(comp.pcnt)
+#(comp.agency.pcnt)
+```
+
+
+```{r  echo=FALSE, fig.width=8,fig.height=9}
+library(ggplot2)
+ggplot(data = filter(comp.agency.pcnt, Agency %in% c('NYPD','HPD')), aes(x=Cryear,y=PercentChange))+
+  geom_bar(stat = 'identity',aes(fill=Cryear))+
+  geom_text(aes(x = Cryear, y = PercentChange, 
+                                    label = paste(PercentChange,'%'),
+                                    group = Agency,
+                                    vjust = -0.4)) +
+  labs(title = "Comparing NYPD and HPD Complaints Percent(%) by year", 
+                         x = "Year", 
+                         y = "Percent Change") +
+  facet_wrap(~Agency, ncol = 1)+
+  theme_bw()
+```
+
+## Most Common Complaints 
+
+Noise - Residential and HEAT/HOT WATER are clearly top 2 complaints of recent years.
+```{r echo=FALSE}
+nyc.comp.rating<- nyc.comp.trend %>%
+    select(ComplaintType,Cryear)%>%
+    group_by(ComplaintType,Cryear)%>%
+    summarise(TotalCount=n())%>%
+    arrange(desc(TotalCount))
+
+#kable(head(nyc.comp.rating))
+
+```
+
+
+```{r echo=FALSE,fig.align='center',fig.width=7,fig.height=5}
+ggplot(data=head(nyc.comp.rating,25), aes(x=Cryear, y=TotalCount, group=ComplaintType)) +
+  geom_line(aes(color=ComplaintType))+
+  labs(title = "Most Common NYC 311 Complaints", 
+                         x = "Year", 
+                         y = "Total Number Of Complaints")+
+  geom_point()+
+  theme_bw()
+```
+
+## Least Common Complaints 
+
+X-Ray Machine/Equipment and Bottled Water are ranked lowest
+
+```{r echo=FALSE, fig.align='center',fig.width=7,fig.height=5}
+
+ggplot(data=tail(filter(nyc.comp.rating,TotalCount>10),10), aes(x=Cryear, y=TotalCount, group=ComplaintType)) +
+  geom_line(aes(color=ComplaintType))+
+  labs(title = "Least Common NYC 311 Complaints", 
+                         x = "Year", 
+                         y = "Total Number Of Complaints")+
+  geom_point()+
+  theme_bw()
+```
+
+## Heatmap of the most common complaints 
+
+Below is the borough wise heatmap for 311 complaints. As expected, Noise - Residential and HEAT/HOT WATER complaint types clearly have upward trends whereas street condition and unsanitary condition complaint types are comparively low in number and also appear consistent over last 3 years. 
+
+```{r echo=FALSE,include=FALSE}
+nyc.comp.heatmap<- nyc.comp.trend %>%
+    select(ComplaintType)%>%
+    group_by(ComplaintType)%>%
+    summarise(TotalCount=n()) %>%
+    arrange(desc(TotalCount))
+```
+
+```{r echo=FALSE, fig.align='center',fig.height=6,fig.width=8}
+ggplot(filter(nyc.comp.rating,TotalCount>75000), aes( ComplaintType,Cryear)) + 
+         geom_tile(aes(fill = TotalCount))+
+  labs(title = "Heatmap : Most common NYC 311 Complaints (Borough-wise)", 
+                         x = "Complaint Type", 
+                         y = "year")+
+  theme_bw() +
+  theme(axis.line = element_line(color = "black"), axis.text.x = element_text(angle = 65, hjust = 1))+
+  coord_flip()
+```
+
+
+```{r echo=FALSE,include=FALSE}
+nyc.comp.boro<- nyc.comp.trend %>%
+    select(ComplaintType,Borough)%>%
+    group_by(ComplaintType,Borough)%>%
+    summarise(TotalCount=n())%>%
+    arrange(desc(TotalCount))
+```
+##Complaint Status
+
+Data analysis shows that majority number of complaints are closed and only few are open and pending. From the plot it's very clear that there are some ageing complaints that need attention.
+
+```{r echo=FALSE}
+nyc.comp.status<- nyc.comp.trend %>%
+    select(ComplaintType,Status,Cryear)%>%
+    group_by(ComplaintType,Status,Cryear)%>%
+    summarise(TotalCount=n())%>%
+    arrange(desc(TotalCount))
+
+kable(head(nyc.comp.status,5))
+```
+
+```{r echo=FALSE, fig.align='center',fig.height=6,fig.width=8}
+ggplot(data=nyc.comp.status, aes(x = Cryear, y = TotalCount )) +
+  geom_bar(aes(fill=ComplaintType),stat = "identity", show.legend = F) +
+  theme_bw() +
+            theme(panel.border = element_blank(), panel.grid = element_blank(),
+                  axis.line = element_line(color = "black"), axis.text.x = element_text(angle = 65, hjust = 1))+
+  facet_wrap(~Status,ncol = 3)
+```
+
+##Same Day Complaint closures
+
+Below plot shows top 100 complaints types that got closed on same day by their respective agencies. 
+
+* Blocked Drivaway and Illegal Parking in Queens and Brooklyn appear to be the most common type complaint that got closed on same day
+* Only Manhattan appears to have homeless person assitance complaints.
+
+
+```{r echo=FALSE, fig.align='center',fig.height=8,fig.width=10}
+library(stringi)
+
+nyc.comp.samedayClosure<- nyc.comp.trend %>%
+    select(ComplaintType,CreatedDate,ClosedDate,Borough,Cryear)%>%
+    filter(substr(CreatedDate,1,10)==substr(ClosedDate,1,10)) %>%
+    group_by(ComplaintType,Borough,Cryear)%>%
+    summarise(TotalCount=n()) %>%
+    arrange(desc(TotalCount))
+
+#head(nyc.comp.samedayClosure)
+
+ggplot(data=head(nyc.comp.samedayClosure,100), aes(x =Cryear , y = TotalCount/1000 )) +
+  geom_bar(aes(fill=ComplaintType),stat = "identity", show.legend = T) +
+  labs(title = "Same Day Complaints Closure", 
+                         x = "Year", 
+                         y = "Complaint Count (1000)")+
+  theme_bw() +
+            theme(axis.text.x = element_text(angle = 65, hjust = 1))+
+  facet_wrap(~Borough,ncol = 2)
+```
+
+
+#Some Statistical Analysis..
+For the most commmon complaint type , Heat/ Hot Water, below box plot clealy indicates that Bronx has most number of such complaint where as difference between median and 1st quartile (IQR) is high for Manhattan and Queens both.
+```{r echo=FALSE}
+nyc.data.compBoroYr <- nyc.comp.trend %>%
+  select(ComplaintType,Borough,Cryear) %>%
+  group_by(ComplaintType,Borough,Cryear) %>%
+  summarise(TotalCount=n()) %>%
+  arrange(desc(TotalCount))
+
+kable(head(nyc.data.compBoroYr))
+```
+
+```{r echo=FALSE}
+com.heat.hotwater <- nyc.data.compBoroYr %>%
+  filter(ComplaintType=='HEAT/HOT WATER') 
+```
+```{r}
+summary(com.heat.hotwater$TotalCount)
+```
+
+```{r echo=FALSE, fig.align='center',fig.height=5,fig.width=7}
+fill <- '#56B4E9'
+ggplot(com.heat.hotwater,aes(x=Borough,y=TotalCount))+
+  geom_boxplot(fill=fill)+
+  theme_bw()
+```
+
+
+```{r echo=FALSE}
+com.heat.hotwater.brklyn <- filter(com.heat.hotwater,Borough=='BROOKLYN')
+hist(com.heat.hotwater.brklyn$TotalCount)
+```
+
+
+# Conclusion: 
+
+* The number of complaints have gone up since 2010 and has upward trend. For year 2016-17:
+    + Staten Island has highest, almost 17% increase in number of complaints from 16.65% to 33.59%
+    + Manhattan has ~10% less complaints registered
+    + Bronx has lowest % increase ~3%
+* NYPD and HPD handle most of number of complaints
+* Most and Least Common Complaints:
+    + Noise - Residential and HEAT/HOT WATER are the top 2 complaints types
+    + X-Ray Machine/Equipment and Bottled Water are lowest ranked complaints typpes
+* Same day complaint closure:
+    + Blocked Drivaway and Illegal Parking in Queens and Brooklyn top the list of same day complaint closure
+* Phone and Online complaints are the most common type of data channel for complaints
+
+
+
